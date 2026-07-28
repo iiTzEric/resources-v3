@@ -79,15 +79,16 @@ function SignupForm({
       <p className="auth-subtitle">Start building today</p>
 
       {error && (
-        <div className="auth-error">
+        <div className="auth-error" role="alert">
           <span>⚠</span> {error}
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="auth-fields">
         <div className="auth-field">
-          <label>Full name</label>
+          <label htmlFor="signup-name">Full name</label>
           <input
+            id="signup-name"
             type="text"
             name="name"
             value={form.name}
@@ -99,8 +100,9 @@ function SignupForm({
         </div>
 
         <div className="auth-field">
-          <label>Email</label>
+          <label htmlFor="signup-email">Email</label>
           <input
+            id="signup-email"
             type="email"
             name="email"
             value={form.email}
@@ -112,8 +114,9 @@ function SignupForm({
         </div>
 
         <div className="auth-field">
-          <label>Password</label>
+          <label htmlFor="signup-password">Password</label>
           <input
+            id="signup-password"
             type="password"
             name="password"
             value={form.password}
