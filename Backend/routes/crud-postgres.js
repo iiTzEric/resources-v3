@@ -27,8 +27,8 @@
 
 const express = require('express')
 const router = express.Router()
-const prisma = require('../utils/prisma')
-const { auth } = require('../middleware/auth-prisma')
+const prisma = require('../../utils/prisma')
+const { auth } = require('../../middleware/auth-prisma')
 
 // ── GET /api/tasks ──────────────────────────
 router.get('/', async (req, res, next) => {
