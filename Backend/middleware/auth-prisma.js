@@ -27,8 +27,8 @@
 // })
 // ============================================
 
-const { verifyToken } = require('../utils/jwt')
-const prisma = require('../utils/prisma')
+const { verifyToken } = require('../../utils/jwt')
+const prisma = require('../../utils/prisma')
 
 const auth = async (req, res, next) => {
   try {
