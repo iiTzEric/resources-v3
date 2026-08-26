@@ -20,11 +20,17 @@
 
 ## Connecting
 
-```js
-import mongoose from 'mongoose';
+The code in this repository uses CommonJS (`require` and `module.exports`), so the examples below use that same module system.
 
-await mongoose.connect(process.env.MONGO_URI);
-console.log('Connected to MongoDB');
+```js
+const mongoose = require("mongoose");
+
+async function connect() {
+  await mongoose.connect(process.env.MONGO_URI);
+  console.log("Connected to MongoDB");
+}
+
+connect();
 ```
 
 ---
@@ -34,18 +40,30 @@ console.log('Connected to MongoDB');
 **What:** A schema defines the shape of a document (fields, types, validation rules). A model is what you actually use to query/create documents based on that schema.
 
 **How:**
+
 ```js
 // models/Task.js
-import mongoose from 'mongoose';
+const mongoose = require("mongoose");
 
-const taskSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  completed: { type: Boolean, default: false },
-  priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // reference to another collection
-}, { timestamps: true }); // auto-adds createdAt / updatedAt
+const taskSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true },
+    completed: { type: Boolean, default: false },
+    priority: {
+      type: String,
+      enum: ["low", "medium", "high"],
+      default: "medium",
+    },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+  },
+  { timestamps: true },
+); // auto-adds createdAt / updatedAt
 
-export default mongoose.model('Task', taskSchema);
+module.exports = mongoose.model("Task", taskSchema);
 ```
 
 ---
@@ -53,32 +71,36 @@ export default mongoose.model('Task', taskSchema);
 ## CRUD operations
 
 ```js
-import Task from './models/Task.js';
+const Task = require("./models/Task");
 
-// Create
-const task = await Task.create({ title: 'Buy milk', userId: someUserId });
+async function runExamples() {
+  // Create
+  const task = await Task.create({ title: "Buy milk", userId: someUserId });
 
-// Read — all
-const tasks = await Task.find({ userId: someUserId });
+  // Read — all
+  const tasks = await Task.find({ userId: someUserId });
 
-// Read — one
-const task = await Task.findById(taskId);
+  // Read — one
+  const oneTask = await Task.findById(taskId);
 
-// Read — with a filter
-const incomplete = await Task.find({ userId: someUserId, completed: false });
+  // Read — with a filter
+  const incomplete = await Task.find({ userId: someUserId, completed: false });
 
-// Update
-const updated = await Task.findByIdAndUpdate(
-  taskId,
-  { completed: true },
-  { new: true } // return the updated doc, not the original
-);
+  // Update
+  const updated = await Task.findByIdAndUpdate(
+    taskId,
+    { completed: true },
+    { new: true },
+  );
 
-// Delete
-await Task.findByIdAndDelete(taskId);
+  // Delete
+  await Task.findByIdAndDelete(taskId);
+}
+
+runExamples();
 ```
 
-**Common mistake:** Forgetting `{ new: true }` on `findByIdAndUpdate` — by default, Mongoose returns the document *as it was before* the update, which is confusing if you immediately send that back to the client expecting the new value.
+**Common mistake:** Forgetting `{ new: true }` on `findByIdAndUpdate` — by default, Mongoose returns the document _as it was before_ the update, which is confusing if you immediately send that back to the client expecting the new value.
 
 ---
 
@@ -89,28 +111,33 @@ await Task.findByIdAndDelete(taskId);
 **Why:** A task belongs to a user; you often want the user's info alongside the task without a separate query.
 
 **How:**
+
 ```js
 // When creating: store the reference
-const task = await Task.create({ title: 'Buy milk', userId: user._id });
+async function loadTaskWithUser() {
+  const task = await Task.create({ title: "Buy milk", userId: user._id });
 
-// When reading: populate to get full user data instead of just the ID
-const tasks = await Task.find().populate('userId');
-// each task.userId is now the full user object, not just an ObjectId
+  // When reading: populate to get full user data instead of just the ID
+  const tasks = await Task.find().populate("userId");
+  // each task.userId is now the full user object, not just an ObjectId
+}
 ```
 
-**Common mistake:** Forgetting `.populate()` and being confused why `task.userId` is just a string of characters instead of a full user object — that string *is* the reference; population is a separate, explicit step.
+**Common mistake:** Forgetting `.populate()` and being confused why `task.userId` is just a string of characters instead of a full user object — that string _is_ the reference; population is a separate, explicit step.
 
 ---
 
 ## Validation and error handling
 
 ```js
-try {
-  const task = await Task.create({ title: '' }); // required field missing
-} catch (error) {
-  if (error.name === 'ValidationError') {
-    // error.errors has field-specific messages
-    console.log(error.errors);
+async function createTask() {
+  try {
+    const task = await Task.create({ title: "" }); // required field missing
+  } catch (error) {
+    if (error.name === "ValidationError") {
+      // error.errors has field-specific messages
+      console.log(error.errors);
+    }
   }
 }
 ```

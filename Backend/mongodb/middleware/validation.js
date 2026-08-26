@@ -8,7 +8,7 @@
 //       the database or causes errors
 //
 // USAGE:
-// const { validate, rules } = require('./middleware/validate')
+// const { validate, rules } = require('./middleware/validation')
 //
 // router.post('/signup',
 //   validate([
@@ -59,7 +59,7 @@ const rules = {
   required(field) {
     return (body) => {
       const value = body[field]
-      if (value === undefined || value === null || value === '') {
+      if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
         return `${field} is required`
       }
       return null
@@ -71,6 +71,7 @@ const rules = {
     return (body) => {
       const value = body[field]
       if (!value) return null  // use required() separately
+      if (typeof value !== 'string') return `${field} must be a valid email`
       const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
       return valid ? null : `${field} must be a valid email`
     }
@@ -81,6 +82,7 @@ const rules = {
     return (body) => {
       const value = body[field]
       if (!value) return null
+      if (typeof value !== 'string') return `${field} must be at least ${min} characters`
       return value.length >= min
         ? null
         : `${field} must be at least ${min} characters`
@@ -92,6 +94,7 @@ const rules = {
     return (body) => {
       const value = body[field]
       if (!value) return null
+      if (typeof value !== 'string') return `${field} must be at most ${max} characters`
       return value.length <= max
         ? null
         : `${field} must be at most ${max} characters`
@@ -114,7 +117,8 @@ const rules = {
     return (body) => {
       const value = body[field]
       if (value === undefined || value === null) return null
-      return !isNaN(Number(value))
+      if (typeof value === 'string' && value.trim() === '') return `${field} must be a number`
+      return Number.isFinite(Number(value))
         ? null
         : `${field} must be a number`
     }
@@ -124,7 +128,7 @@ const rules = {
   range(field, min, max) {
     return (body) => {
       const value = Number(body[field])
-      if (isNaN(value)) return null
+      if (!Number.isFinite(value)) return null
       return value >= min && value <= max
         ? null
         : `${field} must be between ${min} and ${max}`
@@ -158,6 +162,7 @@ const rules = {
     return (body) => {
       const value = body[field]
       if (!value) return null
+      if (typeof value !== 'string') return `${field} format is invalid`
       return regex.test(value)
         ? null
         : message || `${field} format is invalid`

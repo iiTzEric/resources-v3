@@ -32,11 +32,16 @@ const User = require('../models/User')
 const auth = async (req, res, next) => {
   try {
     // Get token from authorization header
-    const token = req.header('Authorization').replace('Bearer ', '')
+    const authorization = req.header('Authorization')
+    if (!authorization || !authorization.startsWith('Bearer ')) {
+      throw new Error()
+    }
+    const token = authorization.slice('Bearer '.length)
+    if (!token) throw new Error()
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
     // Find user by ID and ensure token is still valid
-    const user = await User.findOne({ _id: decoded._id, 'tokens.token': token })
+    const user = await User.findOne({ _id: decoded.id, isActive: true })
     if (!user) {
       throw new Error()
     }
@@ -52,9 +57,12 @@ const auth = async (req, res, next) => {
 // Optional auth — user may or may not be logged in
 const optionalAuth = async (req, res, next) => {
   try {
-    const token = req.header('Authorization').replace('Bearer ', '')
+    const authorization = req.header('Authorization')
+    if (!authorization || !authorization.startsWith('Bearer ')) return next()
+    const token = authorization.slice('Bearer '.length)
+    if (!token) return next()
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    const user = await User.findOne({ _id: decoded._id, 'tokens.token': token })
+    const user = await User.findOne({ _id: decoded.id, isActive: true })
     if (user) {
       req.user = user
       req.token = token

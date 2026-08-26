@@ -25,15 +25,21 @@ const error = (message = 'Error', status = 400) => ({
   status
 })
 
-const paginated = (data, total, page, limit) => ({
-  success: true,
-  data,
-  pagination: {
-    total,
-    page,
-    pages: Math.ceil(total / limit),
-    limit
+const paginated = (data, total, page, limit) => {
+  if (!Number.isFinite(limit) || limit <= 0) {
+    throw new RangeError('Limit must be a finite number greater than zero')
   }
-})
+
+  return {
+    success: true,
+    data,
+    pagination: {
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+      limit
+    }
+  }
+}
 
 module.exports = { success, error, paginated }

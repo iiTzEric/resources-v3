@@ -22,7 +22,8 @@ const router = express.Router()
 const jwt = require('jsonwebtoken')
 const User = require('../models/User')
 const { auth } = require('../middleware/auth')
-const { validate, rules } = require('../middleware/validate')
+const { validate, rules } = require('../middleware/validation')
+const { authLimiter } = require('../middleware/rateLimiter')
 
 // Generate JWT token
 function generateToken(userId) {
@@ -35,6 +36,7 @@ function generateToken(userId) {
 
 // ── POST /api/auth/signup ───────────────────
 router.post('/signup',
+  authLimiter,
   validate([
     rules.required('name'),
     rules.required('email'),
@@ -71,6 +73,7 @@ router.post('/signup',
 
 // ── POST /api/auth/login ────────────────────
 router.post('/login',
+  authLimiter,
   validate([
     rules.required('email'),
     rules.email('email'),
@@ -98,6 +101,14 @@ router.post('/login',
     }
   }
 )
+
+// JWT logout is handled by removing the token on the client.
+router.post('/logout', auth, (req, res) => {
+  res.json({
+    success: true,
+    message: 'Logged out successfully. Discard the token on the client.'
+  })
+})
 
 // ── GET /api/auth/me ────────────────────────
 router.get('/me', auth, async (req, res) => {

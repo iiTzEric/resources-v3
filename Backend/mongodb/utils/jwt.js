@@ -8,16 +8,22 @@
 
 const jwt = require('jsonwebtoken')
 
+function getSecret(name) {
+  const secret = process.env[name]
+  if (!secret) throw new Error(`${name} is required`)
+  return secret
+}
+
 function generateToken(payload, expiresIn = '7d') {
-  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn })
+  return jwt.sign(payload, getSecret('JWT_SECRET'), { expiresIn })
 }
 
 function verifyToken(token) {
-  return jwt.verify(token, process.env.JWT_SECRET)
+  return jwt.verify(token, getSecret('JWT_SECRET'))
 }
 
 function generateRefreshToken(payload) {
-  return jwt.sign(payload, process.env.JWT_REFRESH_SECRET, {
+  return jwt.sign(payload, getSecret('JWT_REFRESH_SECRET'), {
     expiresIn: '30d'
   })
 }

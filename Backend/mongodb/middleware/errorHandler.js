@@ -88,7 +88,7 @@ function errorHandler(err, req, res, next) {
   }
 
   // Custom app errors
-  if (err.status) {
+  if (Number.isInteger(err.status) && err.status >= 400 && err.status <= 599) {
     return res.status(err.status).json({
       success: false,
       message: err.message

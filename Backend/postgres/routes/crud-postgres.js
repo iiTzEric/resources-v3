@@ -7,7 +7,7 @@
 // HOW TO USE:
 // 1. Copy this file
 // 2. Rename to your resource (e.g. tasks.js)
-// 3. Add/adjust the matching model in prisma/schema.prisma
+// 3. Add/adjust the matching model in schema.prisma
 // 4. Register in server.js:
 //    app.use('/api/tasks', require('./routes/tasks'))
 //
@@ -27,8 +27,30 @@
 
 const express = require('express')
 const router = express.Router()
-const prisma = require('../../utils/prisma')
-const { auth } = require('../../middleware/auth-prisma')
+const prisma = require('../utils/prisma')
+const { auth } = require('../middleware/auth-prisma')
+const { validateTask } = require('../middleware/validation')
+
+function parsePagination(query) {
+  const page = Number(query.page || 1)
+  const limit = Number(query.limit || 20)
+  if (!Number.isInteger(page) || page < 1 || !Number.isInteger(limit) || limit < 1 || limit > 100) {
+    const error = new Error('Page must be a positive integer and limit must be between 1 and 100')
+    error.status = 400
+    throw error
+  }
+  return { page, limit }
+}
+
+function parseId(value, name) {
+  const id = Number(value)
+  if (!Number.isInteger(id) || id < 1) {
+    const error = new Error(`${name} must be a positive integer`)
+    error.status = 400
+    throw error
+  }
+  return id
+}
 
 // ── GET /api/tasks ──────────────────────────
 router.get('/', async (req, res, next) => {
@@ -40,9 +62,17 @@ router.get('/', async (req, res, next) => {
       limit = 20    // items per page
     } = req.query
 
+    const pagination = parsePagination({ page, limit })
     const where = {}
-    if (userId) where.userId = Number(userId)
-    if (completed !== undefined) where.completed = completed === 'true'
+    if (userId) where.userId = parseId(userId, 'userId')
+    if (completed !== undefined) {
+      if (completed !== 'true' && completed !== 'false') {
+        const error = new Error('completed must be true or false')
+        error.status = 400
+        throw error
+      }
+      where.completed = completed === 'true'
+    }
 
     const [total, tasks] = await Promise.all([
       prisma.task.count({ where }),
@@ -50,8 +80,8 @@ router.get('/', async (req, res, next) => {
         where,
         include: { user: { select: { name: true } } },
         orderBy: { createdAt: 'desc' },
-        take: Number(limit),
-        skip: (Number(page) - 1) * Number(limit)
+        take: pagination.limit,
+        skip: (pagination.page - 1) * pagination.limit
       })
     ])
 
@@ -60,9 +90,9 @@ router.get('/', async (req, res, next) => {
       data: tasks,
       pagination: {
         total,
-        page: Number(page),
-        pages: Math.ceil(total / limit),
-        limit: Number(limit)
+        page: pagination.page,
+        pages: Math.ceil(total / pagination.limit),
+        limit: pagination.limit
       }
     })
   } catch (err) {
@@ -73,8 +103,9 @@ router.get('/', async (req, res, next) => {
 // ── GET /api/tasks/:id ──────────────────────
 router.get('/:id', async (req, res, next) => {
   try {
+    const taskId = parseId(req.params.id, 'id')
     const task = await prisma.task.findUnique({
-      where: { id: Number(req.params.id) },
+      where: { id: taskId },
       include: { user: { select: { name: true } } }
     })
 
@@ -89,7 +120,7 @@ router.get('/:id', async (req, res, next) => {
 })
 
 // ── POST /api/tasks ─────────────────────────
-router.post('/', auth, async (req, res, next) => {
+router.post('/', auth, validateTask, async (req, res, next) => {
   try {
     // ── Pick allowed fields — never trust the whole body ──
     const task = await prisma.task.create({
@@ -109,10 +140,11 @@ router.post('/', auth, async (req, res, next) => {
 })
 
 // ── PUT /api/tasks/:id ──────────────────────
-router.put('/:id', auth, async (req, res, next) => {
+router.put('/:id', auth, validateTask, async (req, res, next) => {
   try {
+    const taskId = parseId(req.params.id, 'id')
     const existing = await prisma.task.findUnique({
-      where: { id: Number(req.params.id) }
+      where: { id: taskId }
     })
 
     if (!existing) {
@@ -132,7 +164,7 @@ router.put('/:id', auth, async (req, res, next) => {
     }
 
     const task = await prisma.task.update({
-      where: { id: Number(req.params.id) },
+      where: { id: taskId },
       data,
       include: { user: { select: { name: true } } }
     })
@@ -146,8 +178,9 @@ router.put('/:id', auth, async (req, res, next) => {
 // ── DELETE /api/tasks/:id ───────────────────
 router.delete('/:id', auth, async (req, res, next) => {
   try {
+    const taskId = parseId(req.params.id, 'id')
     const existing = await prisma.task.findUnique({
-      where: { id: Number(req.params.id) }
+      where: { id: taskId }
     })
 
     if (!existing) {
@@ -159,7 +192,7 @@ router.delete('/:id', auth, async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Not authorized to delete this task' })
     }
 
-    await prisma.task.delete({ where: { id: Number(req.params.id) } })
+    await prisma.task.delete({ where: { id: taskId } })
 
     res.json({ success: true, message: 'Task deleted successfully' })
   } catch (err) {

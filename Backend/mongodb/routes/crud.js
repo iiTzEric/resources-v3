@@ -1,66 +1,79 @@
 // ============================================
 // CRUD ROUTE TEMPLATE
 //
-// WHAT: Complete CRUD routes for any resource
+// WHAT: Complete CRUD routes for the Task model
 // WHEN: Any new resource in your app
 // HOW TO USE:
 // 1. Copy this file
 // 2. Rename to your resource (e.g. listings.js)
-// 3. Replace 'Item' with your model name
-// 4. Replace fields in POST and PUT routes
+// 3. Update the model and fields in POST and PUT routes
 // 5. Register in server.js:
 //    app.use('/api/items', require('./routes/items'))
 //
 // ENDPOINTS:
-// GET    /api/items           — get all (with filter)
-// GET    /api/items/:id       — get one
-// POST   /api/items           — create (protected)
-// PUT    /api/items/:id       — update (protected + ownership)
-// DELETE /api/items/:id       — delete (protected + ownership)
+// GET    /api/tasks           — get all (with filter)
+// GET    /api/tasks/:id       — get one
+// POST   /api/tasks           — create (protected)
+// PUT    /api/tasks/:id       — update (protected + ownership)
+// DELETE /api/tasks/:id       — delete (protected + ownership)
 // ============================================
 
 const express = require('express')
 const router = express.Router()
-const Item = require('../models/Item')
+const Task = require('../models/Task')
 const { auth } = require('../middleware/auth')
-const { validate, rules } = require('../middleware/validate')
+const { validate, rules } = require('../middleware/validation')
 
-// ── GET /api/items ──────────────────────────
+function parsePagination(query) {
+  const page = Number(query.page || 1)
+  const limit = Number(query.limit || 20)
+  if (!Number.isInteger(page) || page < 1 || !Number.isInteger(limit) || limit < 1 || limit > 100) {
+    const error = new Error('Page must be a positive integer and limit must be between 1 and 100')
+    error.status = 400
+    throw error
+  }
+  return { page, limit }
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// ── GET /api/tasks ─────────────────────────
 router.get('/', async (req, res, next) => {
   try {
     const {
-      owner,      // filter by owner id
-      category,   // filter by category
+      userId,     // filter by owner id
+      completed,  // filter by completion status
       search,     // text search
-      page = 1,   // pagination
-      limit = 20, // items per page
       sort = '-createdAt'  // sort field
     } = req.query
 
     // Build filter
     const filter = {}
-    if (owner) filter.owner = owner
-    if (category) filter.category = category
-    if (search) filter.$text = { $search: search }
+    const { page, limit } = parsePagination(req.query)
+    if (userId) filter.userId = userId
+    if (completed !== undefined) filter.completed = completed === 'true'
+    if (search) filter.title = { $regex: escapeRegex(search), $options: 'i' }
 
     // Count total for pagination
-    const total = await Item.countDocuments(filter)
+    const total = await Task.countDocuments(filter)
 
     // Query with pagination
-    const items = await Item.find(filter)
-      .populate('owner', 'name avatar')
+    const tasks = await Task.find(filter)
+      .populate('userId', 'name avatar')
       .sort(sort)
-      .limit(Number(limit))
-      .skip((Number(page) - 1) * Number(limit))
+      .limit(limit)
+      .skip((page - 1) * limit)
 
     res.json({
       success: true,
-      data: items,
+      data: tasks,
       pagination: {
         total,
-        page: Number(page),
+        page,
         pages: Math.ceil(total / limit),
-        limit: Number(limit)
+        limit
       }
     })
   } catch (err) {
@@ -68,51 +81,49 @@ router.get('/', async (req, res, next) => {
   }
 })
 
-// ── GET /api/items/:id ──────────────────────
+// ── GET /api/tasks/:id ─────────────────────
 router.get('/:id', async (req, res, next) => {
   try {
-    const item = await Item.findById(req.params.id)
-      .populate('owner', 'name avatar')
+    const task = await Task.findById(req.params.id)
+      .populate('userId', 'name avatar')
 
-    if (!item) {
+    if (!task) {
       return res.status(404).json({
         success: false,
-        message: 'Item not found'
+        message: 'Task not found'
       })
     }
 
-    res.json({ success: true, data: item })
+    res.json({ success: true, data: task })
   } catch (err) {
     next(err)
   }
 })
 
-// ── POST /api/items ─────────────────────────
+// ── POST /api/tasks ─────────────────────────
 router.post('/',
   auth,
   validate([
     rules.required('title'),
-    rules.required('description'),
-    rules.required('category'),
-    rules.oneOf('category', ['Tech', 'Music', 'Art', 'Cooking', 'Fitness', 'Language'])
+      rules.minLength('title', 1),
+      rules.maxLength('title', 200),
+      rules.oneOf('priority', ['low', 'medium', 'high'])
   ]),
   async (req, res, next) => {
     try {
-      // ── Pick allowed fields ──────────────
-      const item = await Item.create({
+      const task = await Task.create({
         title: req.body.title,
         description: req.body.description,
-        category: req.body.category,
-        tags: req.body.tags,
-        price: req.body.price,
-        owner: req.user._id   // always from token — never trust body
+        completed: req.body.completed,
+        priority: req.body.priority,
+        userId: req.user._id
       })
 
-      await item.populate('owner', 'name avatar')
+      await task.populate('userId', 'name avatar')
 
       res.status(201).json({
         success: true,
-        data: item
+        data: task
       })
     } catch (err) {
       next(err)
@@ -120,68 +131,85 @@ router.post('/',
   }
 )
 
-// ── PUT /api/items/:id ──────────────────────
+// ── PUT /api/tasks/:id ──────────────────────
 router.put('/:id', auth, async (req, res, next) => {
   try {
-    const item = await Item.findById(req.params.id)
+    const task = await Task.findById(req.params.id)
 
-    if (!item) {
+    if (!task) {
       return res.status(404).json({
         success: false,
-        message: 'Item not found'
+        message: 'Task not found'
       })
     }
 
     // Ownership check — only owner can update
-    if (item.owner.toString() !== req.user._id.toString()) {
+    if (task.userId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
-        message: 'Not authorized to update this item'
+        message: 'Not authorized to update this task'
       })
     }
 
     // Only update allowed fields
-    const allowed = ['title', 'description', 'category', 'tags', 'price', 'isPublished']
+    const allowed = ['title', 'description', 'completed', 'priority']
+    const updates = {}
     for (const field of allowed) {
       if (req.body[field] !== undefined) {
-        item[field] = req.body[field]
+        updates[field] = req.body[field]
       }
     }
 
-    await item.save()
-    await item.populate('owner', 'name avatar')
+    const validationErrors = []
+    if (updates.title !== undefined) {
+      if (typeof updates.title !== 'string' || updates.title.trim() === '') validationErrors.push('title is required')
+      else if (updates.title.length > 200) validationErrors.push('title must be at most 200 characters')
+    }
+    if (updates.priority !== undefined && !['low', 'medium', 'high'].includes(updates.priority)) {
+      validationErrors.push('priority must be one of: low, medium, high')
+    }
+    if (updates.completed !== undefined && typeof updates.completed !== 'boolean') {
+      validationErrors.push('completed must be a boolean')
+    }
+    if (validationErrors.length > 0) {
+      return res.status(400).json({ success: false, message: 'Validation failed', errors: validationErrors })
+    }
 
-    res.json({ success: true, data: item })
+    Object.assign(task, updates)
+    await task.save()
+    await task.populate('userId', 'name avatar')
+
+    res.json({ success: true, data: task })
   } catch (err) {
     next(err)
   }
 })
 
-// ── DELETE /api/items/:id ───────────────────
+// ── DELETE /api/tasks/:id ───────────────────
 router.delete('/:id', auth, async (req, res, next) => {
   try {
-    const item = await Item.findById(req.params.id)
+    const task = await Task.findById(req.params.id)
 
-    if (!item) {
+    if (!task) {
       return res.status(404).json({
         success: false,
-        message: 'Item not found'
+        message: 'Task not found'
       })
     }
 
     // Ownership check
-    if (item.owner.toString() !== req.user._id.toString()) {
+    if (task.userId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
-        message: 'Not authorized to delete this item'
+        message: 'Not authorized to delete this task'
       })
     }
 
-    await item.deleteOne()
+    await task.deleteOne()
 
     res.json({
       success: true,
-      message: 'Item deleted successfully'
+      message: 'Task deleted successfully'
     })
   } catch (err) {
     next(err)

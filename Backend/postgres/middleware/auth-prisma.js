@@ -27,16 +27,19 @@
 // })
 // ============================================
 
-const { verifyToken } = require('../../utils/jwt')
-const prisma = require('../../utils/prisma')
+const { verifyToken } = require('../utils/jwt')
+const prisma = require('../utils/prisma')
 
 const auth = async (req, res, next) => {
   try {
-    const token = req.header('Authorization').replace('Bearer ', '')
+    const authorization = req.header('Authorization')
+    if (!authorization || !authorization.startsWith('Bearer ')) throw new Error()
+    const token = authorization.slice('Bearer '.length)
+    if (!token) throw new Error()
     const decoded = verifyToken(token)
 
     const user = await prisma.user.findUnique({
-      where: { id: decoded.id },
+      where: { id: decoded.id, isActive: true },
       select: { id: true, name: true, email: true, role: true } // never select password
     })
 
