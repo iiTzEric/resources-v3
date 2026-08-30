@@ -12,3 +12,4 @@ This folder teaches two parallel ways to build an Express API: MongoDB with Mong
 6. Build loading, empty, success, and error states in the frontend before adding advanced UI patterns.
 
 The code examples are building blocks, not a complete production application. Before production use, add tests, HTTPS, secret management, database backups, structured logging, and deployment-specific configuration.
+# resources-v2
